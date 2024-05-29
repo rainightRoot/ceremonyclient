@@ -491,25 +491,27 @@ type verifyChallenge struct {
 func (e *MasterClockConsensusEngine) performVerifyTest(
 	challenge verifyChallenge,
 ) {
-	if !e.frameProver.VerifyChallengeProof(
-		challenge.challenge,
-		challenge.timestamp,
-		challenge.difficultyMetric,
-		challenge.proofs,
-	) {
-		e.logger.Warn(
-			"received invalid proof from peer",
-			zap.String("peer_id", peer.ID(challenge.peerID).String()),
-		)
-		e.pubSub.SetPeerScore(challenge.peerID, -1000)
-	} else {
-		e.logger.Debug(
-			"received valid proof from peer",
-			zap.String("peer_id", peer.ID(challenge.peerID).String()),
-		)
-		info := e.peerInfoManager.GetPeerInfo(challenge.peerID)
-		info.LastSeen = time.Now().UnixMilli()
-	}
+	go func() {
+		if !e.frameProver.VerifyChallengeProof(
+			challenge.challenge,
+			challenge.timestamp,
+			challenge.difficultyMetric,
+			challenge.proofs,
+		) {
+			e.logger.Warn(
+				"received invalid proof from peer",
+				zap.String("peer_id", peer.ID(challenge.peerID).String()),
+			)
+			e.pubSub.SetPeerScore(challenge.peerID, -1000)
+		} else {
+			e.logger.Debug(
+				"received valid proof from peer",
+				zap.String("peer_id", peer.ID(challenge.peerID).String()),
+			)
+			info := e.peerInfoManager.GetPeerInfo(challenge.peerID)
+			info.LastSeen = time.Now().UnixMilli()
+		}
+	}()
 }
 
 func (e *MasterClockConsensusEngine) performBandwidthTest(peerID []byte) {

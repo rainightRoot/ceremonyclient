@@ -176,12 +176,6 @@ func (e *MasterClockConsensusEngine) handleSelfTestReport(
 		timestamp := binary.BigEndian.Uint64(proof[:8])
 		proof = proof[8:]
 
-		// Ignore outdated reports, give 3 minutes + proof time for propagation
-		// delay
-		if int64(timestamp) < (time.Now().UnixMilli() - (480 * 1000)) {
-			return nil
-		}
-
 		challenge := binary.BigEndian.AppendUint64([]byte{}, report.MasterHeadFrame)
 		challenge = append(challenge, peerID...)
 
