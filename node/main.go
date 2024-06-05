@@ -102,8 +102,8 @@ var (
 	)
 	signatureCheck = flag.Bool(
 		"signature-check",
-		true,
-		"enables or disables signature validation (default true)",
+		signatureCheckDefault(),
+		"enables or disables signature validation (default true or value of QUILIBRIUM_SIGNATURE_CHECK env var)",
 	)
 	core = flag.Int(
 		"core",
@@ -135,6 +135,20 @@ var signatories = []string{
 	"81d63a45f068629f568de812f18be5807bfe828a830097f09cf02330d6acd35e3607401df3fda08b03b68ea6e68afd506b23506b11e87a0f80",
 	"6e2872f73c4868c4286bef7bfe2f5479a41c42f4e07505efa4883c7950c740252e0eea78eef10c584b19b1dcda01f7767d3135d07c33244100",
 	"a114b061f8d35e3f3497c8c43d83ba6b4af67aa7b39b743b1b0a35f2d66110b5051dd3d86f69b57122a35b64e624b8180bee63b6152fce4280",
+}
+
+func signatureCheckDefault() bool {
+	envVarValue, envVarExists := os.LookupEnv("QUILIBRIUM_SIGNATURE_CHECK")
+	if envVarExists {
+		def, err := strconv.ParseBool(envVarValue)
+		if err == nil {
+			return def
+		} else {
+			fmt.Println("Invalid environment variable QUILIBRIUM_SIGNATURE_CHECK, must be 'true' or 'false'. Got: " + envVarValue)
+		}
+	}
+
+	return true
 }
 
 func main() {
@@ -206,6 +220,8 @@ func main() {
 
 			fmt.Println("Signature check passed")
 		}
+	} else {
+		fmt.Println("Signature check disabled, skipping...")
 	}
 
 	if *memprofile != "" {
