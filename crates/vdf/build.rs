@@ -110,6 +110,8 @@ fn main() {
         println!("cargo:rustc-link-search=/opt/homebrew/Cellar/gmp/6.3.0/lib");
     }
 
+    uniffi::generate_scaffolding("src/lib.udl").expect("uniffi generation failed");
+
     let manifest_path = env::var("OUT_DIR").expect("cargo should have set this");
     let mut path = PathBuf::from(&manifest_path);
     path.push("constants.rs");
