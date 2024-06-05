@@ -1,4 +1,4 @@
-module source.quilibrium.com/quilibrium/cermonyclient/vdf
+module source.quilibrium.com/quilibrium/monorepo/vdf
 
 go 1.20
 

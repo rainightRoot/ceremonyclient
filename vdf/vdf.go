@@ -1,7 +1,7 @@
 package vdf
 
 import (
-	generated "source.quilibrium.com/quilibrium/cermonyclient/vdf/generated/vdf"
+	generated "source.quilibrium.com/quilibrium/monorepo/vdf/generated/vdf"
 )
 
 //go:generate ./generate.sh

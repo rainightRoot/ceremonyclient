@@ -2,8 +2,8 @@ package vdf_test
 
 import (
 	"golang.org/x/crypto/sha3"
-	"source.quilibrium.com/quilibrium/cermonyclient/vdf"
 	nekrovdf "source.quilibrium.com/quilibrium/monorepo/nekryptology/pkg/vdf"
+	"source.quilibrium.com/quilibrium/monorepo/vdf"
 	"testing"
 )
 
