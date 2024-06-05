@@ -248,14 +248,14 @@ pub trait VDF: Send + Debug {
 
 /// Solve and prove with the Wesolowski VDF using the given parameters.
 /// Outputs the concatenated solution and proof (in this order).
-pub fn wesolowski_solve(int_size_bits: u16, challenge: &[u8], difficulty: u64) -> Vec<u8> {
+pub fn wesolowski_solve(int_size_bits: u16, challenge: &[u8], difficulty: u32) -> Vec<u8> {
     let vdf = WesolowskiVDFParams(int_size_bits).new();
-    vdf.solve(challenge, difficulty).expect("invalid difficulty")
+    vdf.solve(challenge, difficulty.into()).expect("invalid difficulty")
 }
 
 /// Verify with the Wesolowski VDF using the given parameters.
 /// `alleged_solution` is the output of `wesolowski_solve`.
-pub fn wesolowski_verify(int_size_bits: u16, challenge: &[u8], difficulty: u64, alleged_solution: &[u8]) -> bool {
+pub fn wesolowski_verify(int_size_bits: u16, challenge: &[u8], difficulty: u32, alleged_solution: &[u8]) -> bool {
     let vdf = WesolowskiVDFParams(int_size_bits).new();
-    vdf.verify(challenge, difficulty, alleged_solution).is_ok()
+    vdf.verify(challenge, difficulty.into(), alleged_solution).is_ok()
 }

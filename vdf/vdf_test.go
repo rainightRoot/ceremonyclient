@@ -12,7 +12,7 @@ func getChallenge(seed string) [32]byte {
 }
 
 func TestProveVerify(t *testing.T) {
-	difficulty := uint64(10000)
+	difficulty := uint32(10000)
 	challenge := getChallenge("TestProveVerify")
 	solution := vdf.WesolowskiSolve(challenge[:], difficulty)
 	isOk := vdf.WesolowskiVerify(challenge[:], difficulty, solution)
@@ -22,12 +22,12 @@ func TestProveVerify(t *testing.T) {
 }
 
 func TestProveRustVerifyNekro(t *testing.T) {
-	difficulty := 100
+	difficulty := uint32(100)
 	challenge := getChallenge("TestProveRustVerifyNekro")
 
 	for i := 0; i < 100; i++ {
-		solution := vdf.WesolowskiSolve(challenge[:], uint64(difficulty))
-		nekroVdf := nekrovdf.New(uint32(difficulty), challenge)
+		solution := vdf.WesolowskiSolve(challenge[:], difficulty)
+		nekroVdf := nekrovdf.New(difficulty, challenge)
 		isOk := nekroVdf.Verify([516]byte(solution))
 		if !isOk {
 			t.Fatalf("Verification failed")
@@ -37,14 +37,14 @@ func TestProveRustVerifyNekro(t *testing.T) {
 }
 
 func TestProveNekroVerifyRust(t *testing.T) {
-	difficulty := 100
+	difficulty := uint32(100)
 	challenge := getChallenge("TestProveNekroVerifyRust")
 
 	for i := 0; i < 100; i++ {
-		nekroVdf := nekrovdf.New(uint32(difficulty), challenge)
+		nekroVdf := nekrovdf.New(difficulty, challenge)
 		nekroVdf.Execute()
 		proof := nekroVdf.GetOutput()
-		isOk := vdf.WesolowskiVerify(challenge[:], uint64(difficulty), proof[:])
+		isOk := vdf.WesolowskiVerify(challenge[:], difficulty, proof[:])
 		if !isOk {
 			t.Fatalf("Verification failed")
 		}
