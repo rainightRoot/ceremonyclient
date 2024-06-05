@@ -22,6 +22,8 @@ use std::{
     mem::swap,
     ops::{Mul, MulAssign},
 };
+use std::convert::TryInto;
+
 mod congruence;
 pub(super) mod ffi;
 
@@ -338,7 +340,8 @@ impl<B: Borrow<GmpClassGroup>> MulAssign<B> for GmpClassGroup {
 
 impl super::BigNum for Mpz {
     fn probab_prime(&self, iterations: u32) -> bool {
-        self.probab_prime(iterations.max(256) as _) != NotPrime
+        let reps: i32 = iterations.try_into().expect("Iterations fits into i32");
+        self.probab_prime(reps) != NotPrime
     }
 
     fn setbit(&mut self, bit_index: usize) {
