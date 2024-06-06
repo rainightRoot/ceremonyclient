@@ -520,7 +520,7 @@ func runPerfGrinder() {
 		// simulate a random chunk of data
 		b := make([]byte, 65536)
 		rand.Read(b)
-		commit, err := prover.Commit(b, protobufs.IntrinsicExecutionOutputType)
+		commit, err := prover.Commit(b, protobufs.ExecutionContextType)
 		if err != nil {
 			panic(err)
 		}

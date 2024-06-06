@@ -176,7 +176,7 @@ func (k *KZGInclusionProver) ProveAggregate(
 				return nil, errors.Wrap(err, "prove aggregate")
 			}
 
-			for i := 0; i < 128-len(poly); i++ {
+			for i := 0; i < 1024-len(poly); i++ {
 				poly = append(
 					poly,
 					curves.BLS48581G1().Scalar.Zero().(curves.PairingScalar),
@@ -188,7 +188,7 @@ func (k *KZGInclusionProver) ProveAggregate(
 				*curves.BLS48581(
 					curves.BLS48581G1().NewGeneratorPoint(),
 				),
-				128,
+				1024,
 				false,
 			)
 			if err != nil {
@@ -387,7 +387,7 @@ func (k *KZGInclusionProver) VerifyFrame(
 					return errors.Wrap(err, "verify frame")
 				}
 
-				for i := 0; i < 128-len(poly); i++ {
+				for i := 0; i < 1024-len(poly); i++ {
 					poly = append(
 						poly,
 						curves.BLS48581G1().Scalar.Zero().(curves.PairingScalar),
@@ -399,7 +399,7 @@ func (k *KZGInclusionProver) VerifyFrame(
 					*curves.BLS48581(
 						curves.BLS48581G1().NewGeneratorPoint(),
 					),
-					128,
+					1024,
 					false,
 				)
 				if err != nil {
