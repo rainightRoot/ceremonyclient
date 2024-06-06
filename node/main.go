@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
@@ -20,11 +21,14 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 	"source.quilibrium.com/quilibrium/monorepo/node/execution/intrinsics/ceremony/application"
 	"source.quilibrium.com/quilibrium/monorepo/node/p2p"
@@ -35,6 +39,8 @@ import (
 	"github.com/cloudflare/circl/sign/ed448"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
+	mn "github.com/multiformats/go-multiaddr/net"
 	"github.com/pbnjay/memory"
 	"github.com/pkg/errors"
 	"source.quilibrium.com/quilibrium/monorepo/node/app"
@@ -114,6 +120,11 @@ var (
 		"parent-process",
 		0,
 		"specifies the parent process pid for a data worker",
+	)
+	perfGrind = flag.Bool(
+		"perf-grind",
+		true,
+		"runs perf grinder test",
 	)
 )
 
@@ -388,6 +399,11 @@ func main() {
 
 	kzg.Init()
 
+	if *perfGrind {
+		runPerfGrinder()
+		return
+	}
+
 	report := RunSelfTestIfNeeded(*configDirectory, nodeConfig)
 
 	var node *app.Node
@@ -433,6 +449,151 @@ func main() {
 }
 
 var dataWorkers []*exec.Cmd
+
+func createParallelDataClients(
+	paralellism int,
+	logger *zap.Logger,
+) ([]protobufs.DataIPCServiceClient, error) {
+	logger.Info(
+		"connecting to data worker processes",
+		zap.Int("parallelism", paralellism),
+	)
+
+	dataWorkerBaseListenMultiaddr := "/ip4/127.0.0.1/tcp/%d"
+
+	dataWorkerBaseListenPort := 40000
+
+	clients := make([]protobufs.DataIPCServiceClient, paralellism)
+
+	for i := 0; i < paralellism; i++ {
+		ma, err := multiaddr.NewMultiaddr(
+			fmt.Sprintf(
+				dataWorkerBaseListenMultiaddr,
+				int(dataWorkerBaseListenPort)+i,
+			),
+		)
+		if err != nil {
+			panic(err)
+		}
+
+		_, addr, err := mn.DialArgs(ma)
+		if err != nil {
+			panic(err)
+		}
+
+		conn, err := grpc.Dial(
+			addr,
+			grpc.WithTransportCredentials(
+				insecure.NewCredentials(),
+			),
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallSendMsgSize(10*1024*1024),
+				grpc.MaxCallRecvMsgSize(10*1024*1024),
+			),
+		)
+		if err != nil {
+			panic(err)
+		}
+
+		clients[i] = protobufs.NewDataIPCServiceClient(conn)
+	}
+
+	logger.Info(
+		"connected to data worker processes",
+		zap.Int("parallelism", paralellism),
+	)
+	return clients, nil
+}
+
+func runPerfGrinder() {
+	logger, _ := zap.NewProduction()
+	prover := qcrypto.NewKZGInclusionProver(logger)
+	cores := runtime.GOMAXPROCS(0)
+	parallelism := cores - 1
+	difficultyMetric := int64(100000)
+	skew := (difficultyMetric * 12) / 10
+
+	clients, _ := createParallelDataClients(parallelism, logger)
+	logger.Info("running performance grinder test")
+	for {
+		logger.Info("run kzg prover")
+		// simulate a random chunk of data
+		b := make([]byte, 65536)
+		rand.Read(b)
+		commit, err := prover.Commit(b, protobufs.IntrinsicExecutionOutputType)
+		if err != nil {
+			panic(err)
+		}
+
+		proof, err := prover.ProveAggregate([]*qcrypto.InclusionCommitment{commit})
+		if err != nil {
+			panic(err)
+		}
+
+		challenge, err := proto.Marshal(&protobufs.InclusionAggregateProof{
+			Filter:      make([]byte, 32),
+			FrameNumber: 0,
+			InclusionCommitments: []*protobufs.InclusionCommitment{
+				{
+					Filter:      make([]byte, 32),
+					FrameNumber: 0,
+					Position:    0,
+					TypeUrl:     proof.InclusionCommitments[0].TypeUrl,
+					Commitment:  proof.InclusionCommitments[0].Commitment,
+					Data:        proof.InclusionCommitments[0].Data,
+				},
+			},
+			Proof: proof.Proof,
+		})
+		if err != nil {
+			panic(err)
+		}
+
+		proofs := make([][]byte, parallelism)
+		nextMetrics := make([]int64, parallelism)
+
+		wg := sync.WaitGroup{}
+		wg.Add(int(parallelism))
+		logger.Info("run weso provers")
+		ts := time.Now().UnixMilli()
+		for i := uint32(0); i < uint32(parallelism); i++ {
+			i := i
+			go func() {
+				resp, err :=
+					clients[i].CalculateChallengeProof(
+						context.Background(),
+						&protobufs.ChallengeProofRequest{
+							Challenge: challenge,
+							Core:      i,
+							Skew:      skew,
+							NowMs:     ts,
+						},
+					)
+				if err != nil {
+					panic(err)
+				}
+
+				proofs[i], nextMetrics[i] = resp.Output, resp.NextSkew
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+		nextDifficultySum := uint64(0)
+		for i := 0; i < int(parallelism); i++ {
+			nextDifficultySum += uint64(nextMetrics[i])
+		}
+
+		nextDifficultyMetric := int64(nextDifficultySum / uint64(parallelism))
+
+		logger.Info(
+			"recalibrating difficulty metric",
+			zap.Int64("previous_difficulty_metric", difficultyMetric),
+			zap.Int64("next_difficulty_metric", nextDifficultyMetric),
+		)
+		difficultyMetric = nextDifficultyMetric
+		skew = (nextDifficultyMetric * 12) / 10
+	}
+}
 
 func spawnDataWorkers() {
 	process, err := os.Executable()

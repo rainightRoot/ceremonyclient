@@ -607,8 +607,8 @@ func (w *WesolowskiFrameProver) CalculateChallengeProof(
 	input := binary.BigEndian.AppendUint64([]byte{}, uint64(nowMs))
 	input = append(input, challenge...)
 
-	// 4.5 minutes = 270 seconds, one increment should be ten seconds
-	proofDuration := 270 * 1000
+	// setting this to 10s for single data time proof
+	proofDuration := 10 * 1000
 	calibratedDifficulty := (int64(proofDuration) * 10000) / skew
 	instanceInput := binary.BigEndian.AppendUint32([]byte{}, core)
 	instanceInput = append(instanceInput, input...)
@@ -649,8 +649,7 @@ func (w *WesolowskiFrameProver) VerifyChallengeProof(
 		instanceInput = append(instanceInput, input...)
 		b := sha3.Sum256(instanceInput)
 
-		// 4.5 minutes = 270 seconds, one increment should be ten seconds
-		proofDuration := 270 * 1000
+		proofDuration := 10 * 1000
 		skew := (assertedDifficulty * 12) / 10
 		calibratedDifficulty := (int64(proofDuration) * 10000) / skew
 
