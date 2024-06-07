@@ -2,7 +2,7 @@ use super::mpz::mp_limb_t;
 use std;
 use libc::c_int;
 
-#[link(name = "gmp")]
+#[link(name = "gmp", kind = "static")]
 extern "C" {
     static __gmp_bits_per_limb: c_int;
 }

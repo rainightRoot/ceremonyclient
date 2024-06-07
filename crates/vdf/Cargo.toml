@@ -23,7 +23,7 @@ edition = "2018"
 description = "An implementation of Verifiable Delay Functions (VDFs) in Rust"
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["lib", "staticlib"]
 name = "vdf"
 
 [dependencies]

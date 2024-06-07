@@ -105,11 +105,6 @@ fn generate(f: &mut dyn Write) {
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     
-    let target = env::var("TARGET").expect("cargo should have set this");
-    if target == "aarch64-apple-darwin" {
-        println!("cargo:rustc-link-search=/opt/homebrew/Cellar/gmp/6.3.0/lib");
-    }
-
     uniffi::generate_scaffolding("src/lib.udl").expect("uniffi generation failed");
 
     let manifest_path = env::var("OUT_DIR").expect("cargo should have set this");

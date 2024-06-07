@@ -1,8 +1,7 @@
 #!/bin/bash
 set -euxo pipefail
 
-SCRIPT_DIR="${SCRIPT_DIR:-$( cd "../$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )}"
-ROOT_DIR="$SCRIPT_DIR"
+ROOT_DIR="${ROOT_DIR:-$( cd "$(dirname "$(realpath "$( dirname "${BASH_SOURCE[0]}" )")")" >/dev/null 2>&1 && pwd )}"
 
 RUST_VDF_PACKAGE="$ROOT_DIR/crates/vdf"
 BINDINGS_DIR="$ROOT_DIR/vdf"
