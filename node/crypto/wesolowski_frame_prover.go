@@ -13,11 +13,11 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
-	"source.quilibrium.com/quilibrium/monorepo/nekryptology/pkg/vdf"
 	"source.quilibrium.com/quilibrium/monorepo/node/config"
 	"source.quilibrium.com/quilibrium/monorepo/node/keys"
 	"source.quilibrium.com/quilibrium/monorepo/node/protobufs"
 	"source.quilibrium.com/quilibrium/monorepo/node/tries"
+	"source.quilibrium.com/quilibrium/monorepo/vdf"
 )
 
 type WesolowskiFrameProver struct {
@@ -42,9 +42,7 @@ func (w *WesolowskiFrameProver) ProveMasterClockFrame(
 	input = append(input, previousFrame.Output[:]...)
 
 	b := sha3.Sum256(input)
-	v := vdf.New(difficulty, b)
-	v.Execute()
-	o := v.GetOutput()
+	o := vdf.WesolowskiSolve(b, difficulty)
 
 	previousSelectorBytes := [516]byte{}
 	copy(previousSelectorBytes[:], previousFrame.Output[:516])
@@ -113,11 +111,10 @@ func (w *WesolowskiFrameProver) VerifyMasterClockFrame(
 	}
 
 	b := sha3.Sum256(input)
-	v := vdf.New(frame.Difficulty, b)
 	proof := [516]byte{}
 	copy(proof[:], frame.Output)
 
-	if !v.Verify(proof) {
+	if !vdf.WesolowskiVerify(b, frame.Difficulty, proof) {
 		w.logger.Error("invalid proof",
 			zap.Binary("filter", frame.Filter),
 			zap.Uint64("frame_number", frame.FrameNumber),
@@ -159,10 +156,7 @@ func (w *WesolowskiFrameProver) CreateMasterGenesisFrame(
 	error,
 ) {
 	b := sha3.Sum256(seed)
-	v := vdf.New(difficulty, b)
-
-	v.Execute()
-	o := v.GetOutput()
+	o := vdf.WesolowskiSolve(b, difficulty)
 	inputMessage := o[:]
 
 	w.logger.Debug("proving genesis frame")
@@ -178,10 +172,7 @@ func (w *WesolowskiFrameProver) CreateMasterGenesisFrame(
 	}
 
 	b = sha3.Sum256(input)
-	v = vdf.New(difficulty, b)
-
-	v.Execute()
-	o = v.GetOutput()
+	o = vdf.WesolowskiSolve(b, difficulty)
 
 	frame := &protobufs.ClockFrame{
 		Filter:      filter,
@@ -248,10 +239,7 @@ func (w *WesolowskiFrameProver) ProveDataClockFrame(
 	input = append(input, commitmentInput...)
 
 	b := sha3.Sum256(input)
-	v := vdf.New(difficulty, b)
-
-	v.Execute()
-	o := v.GetOutput()
+	o := vdf.WesolowskiSolve(b, difficulty)
 
 	// TODO: make this configurable for signing algorithms that allow
 	// user-supplied hash functions
@@ -341,10 +329,7 @@ func (w *WesolowskiFrameProver) CreateDataGenesisFrame(
 	}
 
 	b := sha3.Sum256(input)
-	v := vdf.New(difficulty, b)
-
-	v.Execute()
-	o := v.GetOutput()
+	o := vdf.WesolowskiSolve(b, difficulty)
 
 	commitments := []*protobufs.InclusionCommitment{}
 	for i, commit := range inclusionProof.InclusionCommitments {
@@ -438,7 +423,6 @@ func (w *WesolowskiFrameProver) VerifyDataClockFrame(
 	}
 
 	b := sha3.Sum256(input)
-	v := vdf.New(frame.Difficulty, b)
 	proof := [516]byte{}
 	copy(proof[:], frame.Output)
 
@@ -458,7 +442,7 @@ func (w *WesolowskiFrameProver) VerifyDataClockFrame(
 			)
 		}
 	}
-	if !v.Verify(proof) {
+	if !vdf.WesolowskiVerify(b, frame.Difficulty, proof) {
 		return errors.Wrap(
 			errors.New("invalid proof"),
 			"verify clock frame",
@@ -585,11 +569,10 @@ func (w *WesolowskiFrameProver) VerifyWeakRecursiveProof(
 	}
 
 	b := sha3.Sum256(input[:len(input)-516])
-	v := vdf.New(difficulty, b)
 	output := [516]byte{}
 	copy(output[:], input[len(input)-516:])
 
-	if v.Verify(output) {
+	if vdf.WesolowskiVerify(b, difficulty, output) {
 		w.logger.Debug("verification succeeded")
 		return true
 	} else {
@@ -613,10 +596,7 @@ func (w *WesolowskiFrameProver) CalculateChallengeProof(
 	instanceInput := binary.BigEndian.AppendUint32([]byte{}, core)
 	instanceInput = append(instanceInput, input...)
 	b := sha3.Sum256(instanceInput)
-	v := vdf.New(uint32(calibratedDifficulty), b)
-
-	v.Execute()
-	o := v.GetOutput()
+	o := vdf.WesolowskiSolve(b, uint32(calibratedDifficulty))
 
 	output := make([]byte, 516)
 	copy(output[:], o[:])
@@ -653,15 +633,13 @@ func (w *WesolowskiFrameProver) VerifyChallengeProof(
 		skew := (assertedDifficulty * 12) / 10
 		calibratedDifficulty := (int64(proofDuration) * 10000) / skew
 
-		v := vdf.New(uint32(calibratedDifficulty), b)
-		check := v.Verify([516]byte(proof[i]))
+		check := vdf.WesolowskiVerify(b, uint32(calibratedDifficulty), [516]byte(proof[i]))
 		if !check {
 			// TODO: Remove after 2024-05-28
 			if time.Now().Before(config.GetMinimumVersionCutoff()) {
 				calibratedDifficulty = (int64(proofDuration) / skew) * 10000
 
-				v = vdf.New(uint32(calibratedDifficulty), sha3.Sum256(input))
-				check = v.Verify([516]byte(proof[i]))
+				check = vdf.WesolowskiVerify(sha3.Sum256(input), uint32(calibratedDifficulty), [516]byte(proof[i]))
 				if !check {
 					return false
 				}

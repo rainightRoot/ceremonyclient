@@ -25,6 +25,22 @@ tasks:
       - echo -n "Branch    :" && echo " {{.GIT_BRANCH}}"
       - echo -n "Commit    :" && echo " {{.GIT_COMMIT}}"
     silent: true
+    
+  build_node_arm64_macos:
+    desc: Build the Quilibrium node binary for MacOS ARM. Assumes it's ran from the same platform. Outputs to node/build.
+    cmds:
+      - vdf/generate.sh
+      - node/build.sh -o build/arm64_macos/node
+
+  build_node_arm64_linux:
+    desc: Build the Quilibrium node binary for ARM64 Linux. Outputs to node/build.
+    cmds:
+      - docker build --platform linux/arm64 -f Dockerfile --output node/build/arm64_linux --target=node .
+
+  build_node_amd64_linux:
+    desc: Build the Quilibrium node binary for AMD64 Linux. Outputs to node/build.
+    cmds:
+      - docker build --platform linux/amd64 -f Dockerfile --output node/build/amd64_linux --target=node .
 
   build:
     desc: Build the Quilibrium docker image, unless it is already built.
