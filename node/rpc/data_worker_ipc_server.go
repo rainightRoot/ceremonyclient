@@ -91,6 +91,10 @@ func (r *DataWorkerIPCServer) Start() error {
 
 	go r.monitorParent()
 
+	r.logger.Info(
+		"data worker listening",
+		zap.String("address", r.listenAddrGRPC),
+	)
 	if err := s.Serve(mn.NetListener(lis)); err != nil {
 		panic(err)
 	}
@@ -99,6 +103,14 @@ func (r *DataWorkerIPCServer) Start() error {
 }
 
 func (r *DataWorkerIPCServer) monitorParent() {
+	if r.parentProcessId == 0 {
+		r.logger.Info(
+			"no parent process id specified, running in detached worker mode",
+			zap.Uint32("core_id", r.coreId),
+		)
+		return
+	}
+
 	for {
 		time.Sleep(1 * time.Second)
 		proc, err := os.FindProcess(r.parentProcessId)

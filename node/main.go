@@ -289,9 +289,6 @@ func main() {
 		return
 	}
 
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
-
 	if !*dbConsole && *core == 0 {
 		printLogo()
 		printVersion()
@@ -336,6 +333,8 @@ func main() {
 	}
 
 	if *dhtOnly {
+		done := make(chan os.Signal, 1)
+		signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
 		dht, err := app.NewDHTNode(nodeConfig)
 		if err != nil {
 			panic(err)
@@ -368,7 +367,7 @@ func main() {
 			nodeConfig.Engine.DataWorkerBaseListenPort = 40000
 		}
 
-		if *parentProcess == 0 {
+		if *parentProcess == 0 && len(nodeConfig.Engine.DataWorkerMultiaddrs) == 0 {
 			panic("parent process pid not specified")
 		}
 
@@ -381,6 +380,11 @@ func main() {
 			nodeConfig.Engine.DataWorkerBaseListenMultiaddr,
 			int(nodeConfig.Engine.DataWorkerBaseListenPort)+*core-1,
 		)
+
+		if len(nodeConfig.Engine.DataWorkerMultiaddrs) != 0 {
+			rpcMultiaddr = nodeConfig.Engine.DataWorkerMultiaddrs[*core-1]
+		}
+
 		srv, err := rpc.NewDataWorkerIPCServer(
 			rpcMultiaddr,
 			l,
@@ -400,12 +404,14 @@ func main() {
 	}
 
 	fmt.Println("Loading ceremony state and starting node...")
-	go spawnDataWorkers()
+	go spawnDataWorkers(nodeConfig)
 
 	kzg.Init()
 
 	report := RunSelfTestIfNeeded(*configDirectory, nodeConfig)
 
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
 	var node *app.Node
 	if *debug {
 		node, err = app.NewDebugNode(nodeConfig, report)
@@ -450,7 +456,14 @@ func main() {
 
 var dataWorkers []*exec.Cmd
 
-func spawnDataWorkers() {
+func spawnDataWorkers(nodeConfig *config.Config) {
+	if len(nodeConfig.Engine.DataWorkerMultiaddrs) != 0 {
+		fmt.Println(
+			"Data workers configured by multiaddr, be sure these are running...",
+		)
+		return
+	}
+
 	process, err := os.Executable()
 	if err != nil {
 		panic(err)
@@ -520,6 +533,10 @@ func RunSelfTestIfNeeded(
 	logger, _ := zap.NewProduction()
 
 	cores := runtime.GOMAXPROCS(0)
+	if len(nodeConfig.Engine.DataWorkerMultiaddrs) != 0 {
+		cores = len(nodeConfig.Engine.DataWorkerMultiaddrs) + 1
+	}
+
 	memory := memory.TotalMemory()
 	d, err := os.Stat(filepath.Join(configDir, "store"))
 	if d == nil {

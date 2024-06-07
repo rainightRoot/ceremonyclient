@@ -253,9 +253,19 @@ func (e *MasterClockConsensusEngine) Start() <-chan error {
 			panic("invalid system configuration, minimum system configuration must be four cores")
 		}
 
-		clients, err := e.createParallelDataClients(int(parallelism))
-		if err != nil {
-			panic(err)
+		var clients []protobufs.DataIPCServiceClient
+		if len(e.engineConfig.DataWorkerMultiaddrs) != 0 {
+			clients, err = e.createParallelDataClientsFromList()
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			clients, err = e.createParallelDataClientsFromBaseMultiaddr(
+				int(parallelism),
+			)
+			if err != nil {
+				panic(err)
+			}
 		}
 
 		for {
@@ -378,12 +388,60 @@ func (e *MasterClockConsensusEngine) Start() <-chan error {
 	return errChan
 }
 
-func (e *MasterClockConsensusEngine) createParallelDataClients(
-	paralellism int,
+func (e *MasterClockConsensusEngine) createParallelDataClientsFromList() (
+	[]protobufs.DataIPCServiceClient,
+	error,
+) {
+	parallelism := len(e.engineConfig.DataWorkerMultiaddrs)
+
+	e.logger.Info(
+		"connecting to data worker processes",
+		zap.Int("parallelism", parallelism),
+	)
+
+	clients := make([]protobufs.DataIPCServiceClient, parallelism)
+
+	for i := 0; i < parallelism; i++ {
+		ma, err := multiaddr.NewMultiaddr(e.engineConfig.DataWorkerMultiaddrs[i])
+		if err != nil {
+			panic(err)
+		}
+
+		_, addr, err := mn.DialArgs(ma)
+		if err != nil {
+			panic(err)
+		}
+
+		conn, err := grpc.Dial(
+			addr,
+			grpc.WithTransportCredentials(
+				insecure.NewCredentials(),
+			),
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallSendMsgSize(10*1024*1024),
+				grpc.MaxCallRecvMsgSize(10*1024*1024),
+			),
+		)
+		if err != nil {
+			panic(err)
+		}
+
+		clients[i] = protobufs.NewDataIPCServiceClient(conn)
+	}
+
+	e.logger.Info(
+		"connected to data worker processes",
+		zap.Int("parallelism", parallelism),
+	)
+	return clients, nil
+}
+
+func (e *MasterClockConsensusEngine) createParallelDataClientsFromBaseMultiaddr(
+	parallelism int,
 ) ([]protobufs.DataIPCServiceClient, error) {
 	e.logger.Info(
 		"connecting to data worker processes",
-		zap.Int("parallelism", paralellism),
+		zap.Int("parallelism", parallelism),
 	)
 
 	if e.engineConfig.DataWorkerBaseListenMultiaddr == "" {
@@ -394,9 +452,9 @@ func (e *MasterClockConsensusEngine) createParallelDataClients(
 		e.engineConfig.DataWorkerBaseListenPort = 40000
 	}
 
-	clients := make([]protobufs.DataIPCServiceClient, paralellism)
+	clients := make([]protobufs.DataIPCServiceClient, parallelism)
 
-	for i := 0; i < paralellism; i++ {
+	for i := 0; i < parallelism; i++ {
 		ma, err := multiaddr.NewMultiaddr(
 			fmt.Sprintf(
 				e.engineConfig.DataWorkerBaseListenMultiaddr,
@@ -431,7 +489,7 @@ func (e *MasterClockConsensusEngine) createParallelDataClients(
 
 	e.logger.Info(
 		"connected to data worker processes",
-		zap.Int("parallelism", paralellism),
+		zap.Int("parallelism", parallelism),
 	)
 	return clients, nil
 }
