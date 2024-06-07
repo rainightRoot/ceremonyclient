@@ -583,18 +583,18 @@ func discoverPeers(
 				continue
 			}
 
-			logger.Debug("found peer", zap.String("peer_id", peer.ID.Pretty()))
+			logger.Debug("found peer", zap.String("peer_id", peer.ID.String()))
 			err := h.Connect(ctx, peer)
 			if err != nil {
 				logger.Debug(
 					"error while connecting to blossomsub peer",
-					zap.String("peer_id", peer.ID.Pretty()),
+					zap.String("peer_id", peer.ID.String()),
 					zap.Error(err),
 				)
 			} else {
 				logger.Debug(
 					"connected to peer",
-					zap.String("peer_id", peer.ID.Pretty()),
+					zap.String("peer_id", peer.ID.String()),
 				)
 			}
 		}
