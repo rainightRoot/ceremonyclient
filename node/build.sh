@@ -2,6 +2,7 @@
 set -euxo pipefail
 
 # This script builds the node binary for the current platform and statically links it with VDF static lib.
+# Assumes that the VDF library has been built by running the generate.sh script in the `../vdf` directory.
 
 ROOT_DIR="${ROOT_DIR:-$( cd "$(dirname "$(realpath "$( dirname "${BASH_SOURCE[0]}" )")")" >/dev/null 2>&1 && pwd )}"
 
