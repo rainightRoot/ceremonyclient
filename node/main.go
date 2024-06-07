@@ -12,9 +12,11 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	rdebug "runtime/debug"
 	"runtime/pprof"
 	"strconv"
 	"strings"
@@ -100,8 +102,18 @@ var (
 	)
 	signatureCheck = flag.Bool(
 		"signature-check",
-		true,
-		"enables or disables signature validation (default true)",
+		signatureCheckDefault(),
+		"enables or disables signature validation (default true or value of QUILIBRIUM_SIGNATURE_CHECK env var)",
+	)
+	core = flag.Int(
+		"core",
+		0,
+		"specifies the core of the process (defaults to zero, the initial launcher)",
+	)
+	parentProcess = flag.Int(
+		"parent-process",
+		0,
+		"specifies the parent process pid for a data worker",
 	)
 )
 
@@ -123,6 +135,20 @@ var signatories = []string{
 	"81d63a45f068629f568de812f18be5807bfe828a830097f09cf02330d6acd35e3607401df3fda08b03b68ea6e68afd506b23506b11e87a0f80",
 	"6e2872f73c4868c4286bef7bfe2f5479a41c42f4e07505efa4883c7950c740252e0eea78eef10c584b19b1dcda01f7767d3135d07c33244100",
 	"a114b061f8d35e3f3497c8c43d83ba6b4af67aa7b39b743b1b0a35f2d66110b5051dd3d86f69b57122a35b64e624b8180bee63b6152fce4280",
+}
+
+func signatureCheckDefault() bool {
+	envVarValue, envVarExists := os.LookupEnv("QUILIBRIUM_SIGNATURE_CHECK")
+	if envVarExists {
+		def, err := strconv.ParseBool(envVarValue)
+		if err == nil {
+			return def
+		} else {
+			fmt.Println("Invalid environment variable QUILIBRIUM_SIGNATURE_CHECK, must be 'true' or 'false'. Got: " + envVarValue)
+		}
+	}
+
+	return true
 }
 
 func main() {
@@ -194,6 +220,8 @@ func main() {
 
 			fmt.Println("Signature check passed")
 		}
+	} else {
+		fmt.Println("Signature check disabled, skipping...")
 	}
 
 	if *memprofile != "" {
@@ -264,7 +292,7 @@ func main() {
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
 
-	if !*dbConsole {
+	if !*dbConsole && *core == 0 {
 		printLogo()
 		printVersion()
 		fmt.Println(" ")
@@ -322,7 +350,58 @@ func main() {
 		return
 	}
 
+	if *core != 0 {
+		runtime.GOMAXPROCS(1)
+		rdebug.SetGCPercent(9999)
+
+		if nodeConfig.Engine.DataWorkerMemoryLimit == 0 {
+			nodeConfig.Engine.DataWorkerMemoryLimit = 1792 * 1024 * 1024 // 1.75GiB
+		}
+
+		rdebug.SetMemoryLimit(nodeConfig.Engine.DataWorkerMemoryLimit)
+
+		if nodeConfig.Engine.DataWorkerBaseListenMultiaddr == "" {
+			nodeConfig.Engine.DataWorkerBaseListenMultiaddr = "/ip4/127.0.0.1/tcp/%d"
+		}
+
+		if nodeConfig.Engine.DataWorkerBaseListenPort == 0 {
+			nodeConfig.Engine.DataWorkerBaseListenPort = 40000
+		}
+
+		if *parentProcess == 0 {
+			panic("parent process pid not specified")
+		}
+
+		l, err := zap.NewProduction()
+		if err != nil {
+			panic(err)
+		}
+
+		rpcMultiaddr := fmt.Sprintf(
+			nodeConfig.Engine.DataWorkerBaseListenMultiaddr,
+			int(nodeConfig.Engine.DataWorkerBaseListenPort)+*core-1,
+		)
+		srv, err := rpc.NewDataWorkerIPCServer(
+			rpcMultiaddr,
+			l,
+			uint32(*core)-1,
+			qcrypto.NewWesolowskiFrameProver(l),
+			*parentProcess,
+		)
+		if err != nil {
+			panic(err)
+		}
+
+		err = srv.Start()
+		if err != nil {
+			panic(err)
+		}
+		return
+	}
+
 	fmt.Println("Loading ceremony state and starting node...")
+	go spawnDataWorkers()
+
 	kzg.Init()
 
 	report := RunSelfTestIfNeeded(*configDirectory, nodeConfig)
@@ -365,7 +444,53 @@ func main() {
 	node.Start()
 
 	<-done
+	stopDataWorkers()
 	node.Stop()
+}
+
+var dataWorkers []*exec.Cmd
+
+func spawnDataWorkers() {
+	process, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+
+	cores := runtime.GOMAXPROCS(0)
+	dataWorkers = make([]*exec.Cmd, cores-1)
+	fmt.Printf("Spawning %d data workers...\n", cores-1)
+
+	for i := 1; i <= cores-1; i++ {
+		i := i
+		go func() {
+			args := []string{
+				fmt.Sprintf("--core=%d", i),
+				fmt.Sprintf("--parent-process=%d", os.Getpid()),
+			}
+			args = append(args, os.Args[1:]...)
+			cmd := exec.Command(process, args...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err := cmd.Start()
+			if err != nil {
+				panic(err)
+			}
+
+			dataWorkers[i-1] = cmd
+		}()
+	}
+}
+
+func stopDataWorkers() {
+	for i := 0; i < len(dataWorkers); i++ {
+		err := dataWorkers[i].Process.Signal(os.Kill)
+		if err != nil {
+			fmt.Printf(
+				"fatal: unable to kill worker with pid %d, please kill this process!\n",
+				dataWorkers[i].Process.Pid,
+			)
+		}
+	}
 }
 
 // Reintroduce at a later date

@@ -1,21 +1,49 @@
-FROM golang:1.20.14-alpine3.19 as build
+FROM golang:1.20.14-bullseye as build-base
+
+ENV PATH="${PATH}:/root/.cargo/bin/"
+
+# Install GMP 6.2 (6.3 which MacOS is using only available on Debian unstable)
+RUN apt-get update && apt-get install -y \
+  libgmp-dev \
+  && rm -rf /var/lib/apt/lists/* 
+
+COPY docker/rustup-init.sh /opt/rustup-init.sh
+
+RUN /opt/rustup-init.sh -y --profile minimal
+
+# Install uniffi-bindgen-go
+RUN cargo install uniffi-bindgen-go --git https://github.com/NordSecurity/uniffi-bindgen-go --tag v0.2.1+v0.25.0
+
+FROM build-base as build
 
 ENV GOEXPERIMENT=arenas
+ENV QUILIBRIUM_SIGNATURE_CHECK=false
 
 WORKDIR /opt/ceremonyclient
 
 COPY . .
 
+## Generate Rust bindings for VDF
+WORKDIR /opt/ceremonyclient/vdf
+RUN ./generate.sh
+
+# Build and install the node
 WORKDIR /opt/ceremonyclient/node
 
-RUN go install ./...
+RUN ./build.sh && cp node /go/bin
 RUN go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
 
+# Build and install qclient
 WORKDIR /opt/ceremonyclient/client
 
 RUN go build -o qclient ./main.go
 
-FROM alpine:3.19
+# Allows exporting single binary
+FROM scratch AS node
+COPY --from=build /go/bin/node /node
+ENTRYPOINT [ "/node" ]
+
+FROM debian:bullseye
 
 ARG NODE_VERSION
 ARG GIT_REPO
