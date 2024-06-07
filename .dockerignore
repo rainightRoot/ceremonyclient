@@ -4,3 +4,6 @@
 github.env
 Taskfile.yaml
 
+# Rust
+target
+vdf/generated
