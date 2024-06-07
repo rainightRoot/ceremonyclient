@@ -112,7 +112,7 @@ func LoadConfig(configPath string, proverKey string) (*Config, error) {
 			},
 		},
 		P2P: &P2PConfig{
-			ListenMultiaddr: "/ip4/0.0.0.0/udp/8336/quic",
+			ListenMultiaddr: "/ip4/0.0.0.0/tcp/8336",
 			BootstrapPeers:  BootstrapPeers,
 			PeerPrivKey:     "",
 			Network:         0,
