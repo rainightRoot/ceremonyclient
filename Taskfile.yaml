@@ -40,12 +40,12 @@ tasks:
   build_node_arm64_linux:
     desc: Build the Quilibrium node binary for ARM64 Linux. Outputs to node/build.
     cmds:
-      - docker build --platform linux/arm64 -f Dockerfile --output node/build/arm64_linux --target=node .
+      - docker build --platform linux/arm64 -f Dockerfile.source --output node/build/arm64_linux --target=node .
 
   build_node_amd64_linux:
     desc: Build the Quilibrium node binary for AMD64 Linux. Outputs to node/build.
     cmds:
-      - docker build --platform linux/amd64 -f Dockerfile --output node/build/amd64_linux --target=node .
+      - docker build --platform linux/amd64 -f Dockerfile.source --output node/build/amd64_linux --target=node .
 
   build:source:
     desc: Build the Quilibrium docker image from source.
