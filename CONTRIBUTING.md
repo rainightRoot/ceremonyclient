@@ -1,18 +1,28 @@
-# Local development
+# Contributing
 
-The following software is required for local development (assuming MacOS ARM):
+## Testing
 
-- Go 1.20 
-- Rust toolchain 
-- GMP 6.3: `brew install gmp`
-- Install the Go plugin for uniffi-rs: `cargo install uniffi-bindgen-go --git https://github.com/NordSecurity/uniffi-bindgen-go --tag v0.2.1+v0.25.0`
+Testing the [`vdf`](./vdf) and [`node`](./node) packages requires linking the
+[native VDF](./crates/vdf). The `test.sh` scripts in the respective directories
+help with this.
 
-# Building release binaries
+## Pull Requests
 
-The following is software is required to build release binaries (assuming MacOS
-ARM) :
+Contributions are welcome – a new network is rife with opportunities. We are
+in the process of updating our JIRA board so that it can be made public. The
+repository has basic coding guidelines:
 
-- [Local development](#local-development) dependencies
+- 80 character line limit, with the exception where gofmt or the syntax is
+  impossible to achieve otherwise
+- Error wrapping matching function names
+- Interface composition and dependency injection with Wire
+
+## Building release binaries
+
+The following software is required to build release binaries (assuming MacOS
+ARM):
+
+- [Running from source](README.md#running-from-source) dependencies
 - Docker
 - [Taskfile](https://taskfile.dev/)
 
@@ -22,13 +32,8 @@ that statically link the [native VDF](./crates/vdf) for the supported platforms:
 ```shell
 task build_node_arm64_macos
 task build_node_arm64_linux
-task build_node_arm64_macos
+task build_node_amd64_linux
 ```
 
 The output binaries will be in `node/build`.
 
-# Testing
-
-Testing the [`vdf`](./vdf) and [`node`](./node) packages requires linking the
-[native VDF](./crates/vdf). The `test.sh` scripts in the respective directories
-help with this.
