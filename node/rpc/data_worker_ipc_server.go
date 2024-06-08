@@ -39,19 +39,17 @@ func (r *DataWorkerIPCServer) CalculateChallengeProof(
 		)
 	}
 
-	proof, nextSkew, err := r.prover.CalculateChallengeProof(
+	proof, err := r.prover.CalculateChallengeProof(
 		req.Challenge,
 		uint32(r.coreId),
-		req.Skew,
-		req.NowMs,
+		req.Increment,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "calculate challenge proof")
 	}
 
 	return &protobufs.ChallengeProofResponse{
-		Output:   proof,
-		NextSkew: nextSkew,
+		Output: proof,
 	}, nil
 }
 
@@ -96,6 +94,7 @@ func (r *DataWorkerIPCServer) Start() error {
 		zap.String("address", r.listenAddrGRPC),
 	)
 	if err := s.Serve(mn.NetListener(lis)); err != nil {
+		r.logger.Error("terminating server", zap.Error(err))
 		panic(err)
 	}
 

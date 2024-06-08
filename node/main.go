@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"math/big"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -409,6 +410,7 @@ func main() {
 	kzg.Init()
 
 	report := RunSelfTestIfNeeded(*configDirectory, nodeConfig)
+	RunMigrationIfNeeded(*configDirectory, nodeConfig)
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
@@ -429,6 +431,7 @@ func main() {
 			nodeConfig.ListenGRPCMultiaddr,
 			nodeConfig.ListenRestMultiaddr,
 			node.GetLogger(),
+			node.GetDataProofStore(),
 			node.GetClockStore(),
 			node.GetKeyManager(),
 			node.GetPubSub(),
@@ -483,7 +486,7 @@ func spawnDataWorkers(nodeConfig *config.Config) {
 			args = append(args, os.Args[1:]...)
 			cmd := exec.Command(process, args...)
 			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
+			cmd.Stderr = os.Stdout
 			err := cmd.Start()
 			if err != nil {
 				panic(err)
@@ -524,6 +527,56 @@ func RunCompaction(clockStore *store.PebbleClockStore) {
 		}
 	}
 	fmt.Println("compaction complete")
+}
+
+func RunMigrationIfNeeded(
+	configDir string,
+	nodeConfig *config.Config,
+) {
+	shouldMigrate := false
+	migrationInfo := []byte{0x00, 0x00, 0x00}
+	_, err := os.Stat(filepath.Join(configDir, "MIGRATIONS"))
+	if err != nil && os.IsNotExist(err) {
+		fmt.Println("Migrations file not found, will perform migration...")
+		shouldMigrate = true
+	}
+
+	if !shouldMigrate {
+		migrationInfo, err = os.ReadFile(filepath.Join(configDir, "MIGRATIONS"))
+		if err != nil {
+			panic(err)
+		}
+
+		if len(migrationInfo) < 3 ||
+			!bytes.Equal(migrationInfo, []byte{0x01, 0x04, 0x013}) {
+			fmt.Println("Migrations file outdated, will perform migration...")
+			shouldMigrate = true
+		}
+	}
+
+	// If subsequent migrations arise, we will need to distinguish by version
+	if shouldMigrate {
+		fmt.Println("Running migration...")
+
+		// Easiest migration in the world.
+		err := os.RemoveAll(filepath.Join(configDir, "store"))
+		if err != nil {
+			fmt.Println("ERROR: Could not remove store, please be sure to do this before restarting the node.")
+			panic(err)
+		}
+
+		err = os.WriteFile(
+			filepath.Join(configDir, "MIGRATIONS"),
+			[]byte{0x01, 0x04, 0x13},
+			fs.FileMode(0600),
+		)
+		if err != nil {
+			fmt.Println("ERROR: Could not save migration file.")
+			panic(err)
+		}
+
+		fmt.Println("Migration completed.")
+	}
 }
 
 func RunSelfTestIfNeeded(
@@ -572,8 +625,8 @@ func RunSelfTestIfNeeded(
 
 	report := &protobufs.SelfTestReport{}
 	difficulty := nodeConfig.Engine.Difficulty
-	if difficulty == 0 {
-		difficulty = 10000
+	if difficulty == 0 || difficulty == 10000 {
+		difficulty = 100000
 	}
 	report.Difficulty = difficulty
 
@@ -789,8 +842,11 @@ func printBalance(config *config.Config) {
 		panic(err)
 	}
 
-	fmt.Println("Owned balance:", balance.Owned, "QUIL")
-	fmt.Println("Unconfirmed balance:", balance.UnconfirmedOwned, "QUIL")
+	// fmt.Println("Owned balance:", balance.Owned, "QUIL")
+	conversionFactor, _ := new(big.Int).SetString("1DCD65000", 16)
+	r := new(big.Rat).SetFrac(balance.UnconfirmedOwned, conversionFactor)
+	fmt.Println("Note: Balance is strictly rewards earned with 1.4.19+, check https://www.quilibrium.com/rewards for more info about previous rewards.")
+	fmt.Println("Unclaimed balance:", r.FloatString(12), "QUIL")
 }
 
 func printPeerID(p2pConfig *config.P2PConfig) {

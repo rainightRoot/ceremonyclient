@@ -341,7 +341,8 @@ func initDHT(
 	if isBootstrapPeer {
 		kademliaDHT, err = dht.New(ctx, h, dht.Mode(dht.ModeServer))
 	} else {
-		kademliaDHT, err = dht.New(ctx, h, dht.Mode(dht.ModeAuto))
+		// until libp2p gets their shit together, set this as a client only:
+		kademliaDHT, err = dht.New(ctx, h, dht.Mode(dht.ModeClient))
 	}
 	if err != nil {
 		panic(err)

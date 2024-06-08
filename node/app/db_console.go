@@ -819,16 +819,11 @@ func FetchTokenBalance(client protobufs.NodeServiceClient) (TokenBalance, error)
 		return TokenBalance{}, errors.Wrap(err, "error getting token info")
 	}
 
-	conversionFactor, _ := new(big.Int).SetString("1DCD65000", 16)
-
-	owned := new(big.Int).SetBytes(info.OwnedTokens)
-	owned.Div(owned, conversionFactor)
-
+	// owned := new(big.Int).SetBytes(info.OwnedTokens)
 	unconfirmedOwned := new(big.Int).SetBytes(info.UnconfirmedOwnedTokens)
-	unconfirmedOwned.Div(unconfirmedOwned, conversionFactor)
 
 	return TokenBalance{
-		Owned:            owned,
+		// Owned:            owned,
 		UnconfirmedOwned: unconfirmedOwned,
 	}, nil
 }
