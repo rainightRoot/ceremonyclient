@@ -64,17 +64,10 @@ This section contains community-built clients, applications, guides, etc <br /><
 
 - A detailed beginners' guide for how to setup a Quilibrium Node, created by [@demipoet](https://www.github.com/demipoet) - [link](https://quilibrium.guide/)<br/>
 
-  
-## Pull Requests
+## Development
 
-Contributions are welcome – a new network is rife with opportunities. We are
-in the process of updating our JIRA board so that it can be made public. The
-repository has basic coding guidelines:
-
-- 80 character line limit, with the exception where gofmt or the syntax is
-impossible to achieve otherwise
-- Error wrapping matching function names
-- Interface composition and dependency injection with Wire
+Please see the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information on
+how to contribute to this repository.
 
 ## License + Interpretation
 
